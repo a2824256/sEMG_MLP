@@ -7,6 +7,11 @@ import sys, math
 from paddle.utils.plot import Ploter
 # 数据集路径
 path = "Data/"
+# 数据列表
+input_1_list = []
+input_2_list = []
+input_3_list = []
+label_list = []
 # 文件列表
 img_list = glob.glob(path + "*.mat")
 train_set = None
@@ -14,20 +19,19 @@ test_set = None
 
 def train_sample_reader():
     for i in range(10):
-        feature_1 = np.array(train_set[:, 0])
-        feature_2 = np.array(train_set[:, 1])
-        feature_3 = np.array(train_set[:, 2])
-        label = np.array(train_set[:, 4])
-        print(feature_1, feature_2, feature_3, label)
+        feature_1 = np.array(input_1_list).astype('float64')
+        feature_2 = np.array(input_2_list).astype('float64')
+        feature_3 = np.array(input_3_list).astype('float64')
+        label = np.array(label_list).astype('int64')
         yield feature_1, feature_2, feature_3, label
 
 
 def test_sample_reader():
     for i in range(10):
-        feature_1 = np.array(train_set[:, 0])
-        feature_2 = np.array(train_set[:, 1])
-        feature_3 = np.array(train_set[:, 2])
-        label = np.array(train_set[:, 4])
+        feature_1 = np.array(input_1_list).astype('float64')
+        feature_2 = np.array(input_2_list).astype('float64')
+        feature_3 = np.array(input_3_list).astype('float64')
+        label = np.array(label_list).astype('int64')
         yield feature_1, feature_2, feature_3, label
 
 
@@ -56,26 +60,24 @@ print("合并后的数据集尺寸：")
 print(train_set.shape)
 train_set = train_set.tolist()
 for row in range(len(train_set)):
-    train_set[row][0] = train_set[row][0][0].astype('float32').tolist()
-    train_set[row][1] = train_set[row][1][0].astype('float32').tolist()
-    train_set[row][2] = train_set[row][2][0].astype('float32').tolist()
-    train_set[row][3] = train_set[row][3][0].astype('float32').tolist()
-print(type(train_set[:, 0]))
-print(train_set[:, 0][0])
-exit()
+    input_1_list.append(train_set[row][0][0].tolist())
+    input_2_list.append(train_set[row][1][0].tolist())
+    input_3_list.append(train_set[row][2][0].tolist())
+    label_list.append([train_set[row][4][0][0]-1])
+input_3_list = np.array(input_3_list).astype('float64').tolist()
 train_reader = fluid.io.batch(train_sample_reader, batch_size=1)
 test_reader = fluid.io.batch(test_sample_reader, batch_size=1)
 
 print("network")
 # network
-input_1 = fluid.data(name='input_1', shape=[None, 1], dtype='float32')
-input_2 = fluid.data(name='input_2', shape=[None, 1], dtype='float32')
-input_3 = fluid.data(name='input_3', shape=[None, 1], dtype='float32')
+input_1 = fluid.data(name='input_1', shape=[None, 8], dtype='float64')
+input_2 = fluid.data(name='input_2', shape=[None, 8], dtype='float64')
+input_3 = fluid.data(name='input_3', shape=[None, 8], dtype='float64')
 label = fluid.data(name='label', shape=[None, 1], dtype='int64')
 hidden_1 = fluid.layers.fc(name='fc1', input=input_1, size=10, act='relu')
 hidden_2 = fluid.layers.fc(name='fc2', input=input_2, size=10, act='relu')
 hidden_3 = fluid.layers.fc(name='fc3', input=input_3, size=10, act='relu')
-prediction = fluid.layers.fc(name='fc3', input=[hidden_1, hidden_2, hidden_3], size=5, act='relu')
+prediction = fluid.layers.fc(name='pred', input=[hidden_1, hidden_2, hidden_3], size=5, act='softmax')
 
 print("main program")
 # main program
@@ -91,16 +93,18 @@ test_program = main_program.clone(for_test=True)
 adam = fluid.optimizer.Adam(learning_rate=0.01)
 adam.minimize(loss)
 
+# place = fluid.CPUPlace()
 place = fluid.CUDAPlace(0)
 exe = fluid.Executor(place)
 
 num_epochs = 10
 
 params_dirname = "./my_paddle_model"
-feeder = fluid.DataFeeder(place=place, feed_list=[input_1, input_2, input_3, label])
+feeder = fluid.DataFeeder(feed_list=[input_1, input_2, input_3, label], place=place)
 exe.run(startup_program)
 train_prompt = "train cost"
 test_prompt = "test cost"
+
 # %matplotlib inline
 plot_prompt = Ploter(train_prompt, test_prompt)
 step = 0
@@ -128,4 +132,4 @@ for pass_id in range(num_epochs):
 
         #  保存训练参数到之前给定的路径中
         if params_dirname is not None:
-            fluid.io.save_inference_model(params_dirname, ['input'], [prediction], exe)
+            fluid.io.save_inference_model(params_dirname, ['input_1','input_2','input_3'], [prediction], exe)
