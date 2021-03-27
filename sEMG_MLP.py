@@ -6,32 +6,32 @@ import numpy as np
 import sys, math
 from paddle.utils.plot import Ploter
 # 数据集路径
-path = "Data/"
+path = "./Data/DATA/"
 # 数据列表
 input_1_list = []
 input_2_list = []
 input_3_list = []
 label_list = []
 # 文件列表
-img_list = glob.glob(path + "*.mat")
+img_list = glob.glob(path + "feature*.mat")
 train_set = None
 test_set = None
 
 def train_sample_reader():
     for i in range(10):
-        feature_1 = np.array(input_1_list).astype('float64')
-        feature_2 = np.array(input_2_list).astype('float64')
-        feature_3 = np.array(input_3_list).astype('float64')
-        label = np.array(label_list).astype('int64')
+        feature_1 = np.array(input_1_list).astype('float32')
+        feature_2 = np.array(input_2_list).astype('float32')
+        feature_3 = np.array(input_3_list).astype('float32')
+        label = np.array(label_list).astype('int32')
         yield feature_1, feature_2, feature_3, label
 
 
 def test_sample_reader():
     for i in range(10):
-        feature_1 = np.array(input_1_list).astype('float64')
-        feature_2 = np.array(input_2_list).astype('float64')
-        feature_3 = np.array(input_3_list).astype('float64')
-        label = np.array(label_list).astype('int64')
+        feature_1 = np.array(input_1_list).astype('float32')
+        feature_2 = np.array(input_2_list).astype('float32')
+        feature_3 = np.array(input_3_list).astype('float32')
+        label = np.array(label_list).astype('int32')
         yield feature_1, feature_2, feature_3, label
 
 
@@ -60,20 +60,20 @@ print("合并后的数据集尺寸：")
 print(train_set.shape)
 train_set = train_set.tolist()
 for row in range(len(train_set)):
-    input_1_list.append(train_set[row][0][0].tolist())
-    input_2_list.append(train_set[row][1][0].tolist())
-    input_3_list.append(train_set[row][2][0].tolist())
+    input_1_list.append(train_set[row][0].tolist())
+    input_2_list.append(train_set[row][1].tolist())
+    input_3_list.append(train_set[row][2].tolist())
     label_list.append([train_set[row][4][0][0]-1])
-input_3_list = np.array(input_3_list).astype('float64').tolist()
+input_3_list = np.array(input_3_list).astype('float32').tolist()
 train_reader = fluid.io.batch(train_sample_reader, batch_size=1)
 test_reader = fluid.io.batch(test_sample_reader, batch_size=1)
 
 print("network")
 # network
-input_1 = fluid.data(name='input_1', shape=[None, 8], dtype='float64')
-input_2 = fluid.data(name='input_2', shape=[None, 8], dtype='float64')
-input_3 = fluid.data(name='input_3', shape=[None, 8], dtype='float64')
-label = fluid.data(name='label', shape=[None, 1], dtype='int64')
+input_1 = fluid.data(name='input_1', shape=[None, 1, 8], dtype='float32')
+input_2 = fluid.data(name='input_2', shape=[None, 1, 8], dtype='float32')
+input_3 = fluid.data(name='input_3', shape=[None, 1, 8], dtype='float32')
+label = fluid.data(name='label', shape=[None, 1], dtype='int32')
 hidden_1 = fluid.layers.fc(name='fc1', input=input_1, size=10, act='relu')
 hidden_2 = fluid.layers.fc(name='fc2', input=input_2, size=10, act='relu')
 hidden_3 = fluid.layers.fc(name='fc3', input=input_3, size=10, act='relu')
@@ -94,7 +94,8 @@ adam = fluid.optimizer.Adam(learning_rate=0.01)
 adam.minimize(loss)
 
 # place = fluid.CPUPlace()
-place = fluid.CUDAPlace(0)
+# place = fluid.CUDAPlace(0)
+place = fluid.CPUPlace(0)
 exe = fluid.Executor(place)
 
 num_epochs = 10
