@@ -1,4 +1,3 @@
-
 from paddle import fluid
 import scipy.io as scio
 import glob
@@ -6,7 +5,7 @@ import numpy as np
 import sys, math
 from paddle.utils.plot import Ploter
 # 数据集路径
-path = "./Data/DATA/"
+path = "DATA/"
 # 数据列表
 input_1_list = []
 input_2_list = []
@@ -19,19 +18,20 @@ test_set = None
 
 def train_sample_reader():
     for i in range(10):
-        feature_1 = np.array(input_1_list).astype('float32')
-        feature_2 = np.array(input_2_list).astype('float32')
-        feature_3 = np.array(input_3_list).astype('float32')
-        label = np.array(label_list).astype('int32')
+        feature_1 = np.array(input_1_list).astype('float64')
+        feature_2 = np.array(input_2_list).astype('float64')
+        feature_3 = np.array(input_3_list).astype('float64')
+        label = np.array(label_list).astype('int64')
+
         yield feature_1, feature_2, feature_3, label
 
 
 def test_sample_reader():
     for i in range(10):
-        feature_1 = np.array(input_1_list).astype('float32')
-        feature_2 = np.array(input_2_list).astype('float32')
-        feature_3 = np.array(input_3_list).astype('float32')
-        label = np.array(label_list).astype('int32')
+        feature_1 = np.array(input_1_list).astype('float64')
+        feature_2 = np.array(input_2_list).astype('float64')
+        feature_3 = np.array(input_3_list).astype('float64')
+        label = np.array(label_list).astype('int64')
         yield feature_1, feature_2, feature_3, label
 
 
@@ -49,7 +49,6 @@ def train(executor, program, reader, feeder, fetch_list):
 print("读取文件:")
 # data pretreatment
 for file_path in img_list:
-    print(file_path)
     data_dic = scio.loadmat(file_path)
     if train_set is None:
         train_set = data_dic['FeatureSet']
@@ -57,27 +56,26 @@ for file_path in img_list:
         train_set = np.concatenate((train_set, data_dic['FeatureSet']), axis=0)
 
 print("合并后的数据集尺寸：")
-print(train_set.shape)
 train_set = train_set.tolist()
 for row in range(len(train_set)):
-    input_1_list.append(train_set[row][0].tolist())
-    input_2_list.append(train_set[row][1].tolist())
-    input_3_list.append(train_set[row][2].tolist())
+    input_1_list.append(train_set[row][0][0].tolist())
+    input_2_list.append(train_set[row][1][0].tolist())
+    input_3_list.append(train_set[row][2][0].tolist())
     label_list.append([train_set[row][4][0][0]-1])
-input_3_list = np.array(input_3_list).astype('float32').tolist()
+input_3_list = np.array(input_3_list).astype('float64').tolist()
 train_reader = fluid.io.batch(train_sample_reader, batch_size=1)
 test_reader = fluid.io.batch(test_sample_reader, batch_size=1)
 
 print("network")
 # network
-input_1 = fluid.data(name='input_1', shape=[None, 1, 8], dtype='float32')
-input_2 = fluid.data(name='input_2', shape=[None, 1, 8], dtype='float32')
-input_3 = fluid.data(name='input_3', shape=[None, 1, 8], dtype='float32')
-label = fluid.data(name='label', shape=[None, 1], dtype='int32')
-hidden_1 = fluid.layers.fc(name='fc1', input=input_1, size=10, act='relu')
-hidden_2 = fluid.layers.fc(name='fc2', input=input_2, size=10, act='relu')
-hidden_3 = fluid.layers.fc(name='fc3', input=input_3, size=10, act='relu')
-prediction = fluid.layers.fc(name='pred', input=[hidden_1, hidden_2, hidden_3], size=5, act='softmax')
+input_1 = fluid.data(name='input_1', shape=[None, 8], dtype='float64')
+input_2 = fluid.data(name='input_2', shape=[None, 8], dtype='float64')
+input_3 = fluid.data(name='input_3', shape=[None, 8], dtype='float64')
+label = fluid.data(name='label', shape=[None, 1], dtype='int64')
+hidden_1 = fluid.layers.fc(name='fc1', input=input_1, size=60, act='relu')
+hidden_2 = fluid.layers.fc(name='fc2', input=input_2, size=30, act='relu')
+hidden_3 = fluid.layers.fc(name='fc3', input=input_3, size=20, act='relu')
+prediction = fluid.layers.fc(name='pred', input=[hidden_1, hidden_2, hidden_3], size=10, act='softmax')
 
 print("main program")
 # main program
@@ -94,13 +92,13 @@ adam = fluid.optimizer.Adam(learning_rate=0.01)
 adam.minimize(loss)
 
 # place = fluid.CPUPlace()
-# place = fluid.CUDAPlace(0)
-place = fluid.CPUPlace(0)
+place = fluid.CUDAPlace(0)
 exe = fluid.Executor(place)
 
 num_epochs = 10
 
 params_dirname = "./my_paddle_model"
+
 feeder = fluid.DataFeeder(feed_list=[input_1, input_2, input_3, label], place=place)
 exe.run(startup_program)
 train_prompt = "train cost"
@@ -117,13 +115,13 @@ for pass_id in range(num_epochs):
         step = step + 1
         avg_loss_value, = exe.run(main_program, feed=feeder.feed(data_train), fetch_list=[loss])
         if step % 10 == 0:  # 每10个批次记录并输出一下训练损失
-            plot_prompt.append(train_prompt, step, avg_loss_value[0])
-            plot_prompt.plot()
+            # plot_prompt.append(train_prompt, step, avg_loss_value[0])
+            # plot_prompt.plot()
             print("%s, Step %d, Cost %f" % (train_prompt, step, avg_loss_value[0]))
         if step % 10 == 0:  # 每100批次记录并输出一下测试损失
             test_metics = train(executor=exe_test, program=test_program, reader=test_reader, fetch_list=[loss.name], feeder=feeder)
-            plot_prompt.append(test_prompt, step, test_metics[0])
-            plot_prompt.plot()
+            # plot_prompt.append(test_prompt, step, test_metics[0])
+            # plot_prompt.plot()
             print("%s, Step %d, Cost %f" % (test_prompt, step, test_metics[0]))
             if test_metics[0] < 10.0:  # 如果准确率达到要求，则停止训练
                 break
